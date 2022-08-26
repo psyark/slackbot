@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/GoogleCloudPlatform/functions-framework-go/functions"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 )
@@ -21,6 +22,11 @@ type BaseHandler struct {
 
 func New(handler Handler) *BaseHandler {
 	return &BaseHandler{handler: handler}
+}
+
+func RegisterHTTP(name string, handler Handler) {
+	x := New(handler)
+	functions.HTTP(name, x.Handler)
 }
 
 func (h *BaseHandler) Handler(w http.ResponseWriter, r *http.Request) {
