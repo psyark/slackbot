@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/GoogleCloudPlatform/functions-framework-go/functions"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 )
@@ -16,23 +15,22 @@ type Handler interface {
 	OnBlockActions(req *http.Request, cb *slack.InteractionCallback)
 }
 
-type baseHandler struct {
+type BaseHandler struct {
 	handler Handler
 }
 
-func RegisterHandler(handler Handler) {
-	bh := baseHandler{handler: handler}
-	functions.HTTP("main", bh.HandleMain)
+func New(handler Handler) *BaseHandler {
+	return &BaseHandler{handler: handler}
 }
 
-func (h baseHandler) HandleMain(w http.ResponseWriter, r *http.Request) {
+func (h *BaseHandler) Handler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		h.handlePostRequest(w, r)
 	}
 }
 
-func (h baseHandler) handlePostRequest(rw http.ResponseWriter, req *http.Request) error {
+func (h *BaseHandler) handlePostRequest(rw http.ResponseWriter, req *http.Request) error {
 	payload, err := h.getPayload(req)
 	if err != nil {
 		return err
@@ -72,7 +70,7 @@ func (h baseHandler) handlePostRequest(rw http.ResponseWriter, req *http.Request
 	}
 }
 
-func (h baseHandler) handleCallback(req *http.Request, event *slackevents.EventsAPIEvent) error {
+func (h *BaseHandler) handleCallback(req *http.Request, event *slackevents.EventsAPIEvent) error {
 	switch innerEvent := event.InnerEvent.Data.(type) {
 	case *slackevents.MessageEvent:
 		h.handler.OnCallbackMessage(req, innerEvent)
@@ -83,7 +81,7 @@ func (h baseHandler) handleCallback(req *http.Request, event *slackevents.Events
 	}
 }
 
-func (h baseHandler) getPayload(req *http.Request) ([]byte, error) {
+func (h *BaseHandler) getPayload(req *http.Request) ([]byte, error) {
 	switch req.Header.Get("Content-Type") {
 	case "application/x-www-form-urlencoded":
 		if err := req.ParseForm(); err != nil {
@@ -97,7 +95,7 @@ func (h baseHandler) getPayload(req *http.Request) ([]byte, error) {
 	}
 }
 
-func (h baseHandler) verifyURL(rw http.ResponseWriter, uvEvent slackevents.EventsAPIURLVerificationEvent) error {
+func (h *BaseHandler) verifyURL(rw http.ResponseWriter, uvEvent slackevents.EventsAPIURLVerificationEvent) error {
 	rw.Header().Set("Content-Type", "text/plain")
 	_, err := rw.Write([]byte(uvEvent.Challenge))
 	return err
