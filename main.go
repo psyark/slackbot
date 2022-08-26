@@ -22,10 +22,10 @@ type baseHandler struct {
 
 func RegisterHandler(handler Handler) {
 	bh := baseHandler{handler: handler}
-	functions.HTTP("main", bh.handleMain)
+	functions.HTTP("main", bh.HandleMain)
 }
 
-func (h baseHandler) handleMain(w http.ResponseWriter, r *http.Request) {
+func (h baseHandler) HandleMain(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		h.handlePostRequest(w, r)
