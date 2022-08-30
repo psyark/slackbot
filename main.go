@@ -52,10 +52,10 @@ func (h *BaseHandler) handlePostRequest(rw http.ResponseWriter, req *http.Reques
 
 	switch event.Type {
 	case slackevents.URLVerification:
-		if uve, ok := event.Data.(slackevents.EventsAPIURLVerificationEvent); ok {
+		if uve, ok := event.Data.(*slackevents.EventsAPIURLVerificationEvent); ok {
 			return h.verifyURL(rw, uve)
 		}
-		return fmt.Errorf("event.Data is not EventsAPIURLVerificationEvent: %#v", event.Data)
+		return fmt.Errorf("event.Data is not *EventsAPIURLVerificationEvent: %#v", event.Data)
 
 	case slackevents.CallbackEvent:
 		if err := h.handleCallback(req, &event); err != nil {
@@ -102,7 +102,7 @@ func (h *BaseHandler) getPayload(req *http.Request) ([]byte, error) {
 	}
 }
 
-func (h *BaseHandler) verifyURL(rw http.ResponseWriter, uvEvent slackevents.EventsAPIURLVerificationEvent) error {
+func (h *BaseHandler) verifyURL(rw http.ResponseWriter, uvEvent *slackevents.EventsAPIURLVerificationEvent) error {
 	rw.Header().Set("Content-Type", "text/plain")
 	_, err := rw.Write([]byte(uvEvent.Challenge))
 	return err
