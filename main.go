@@ -6,9 +6,9 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/GoogleCloudPlatform/functions-framework-go/functions"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
+	"golang.org/x/xerrors"
 )
 
 type Handler interface {
@@ -24,22 +24,20 @@ func New(handler Handler) *BaseHandler {
 	return &BaseHandler{handler: handler}
 }
 
-func RegisterHTTP(name string, handler Handler) {
-	x := New(handler)
-	functions.HTTP(name, x.Handler)
-}
-
 func (h *BaseHandler) Handler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
-		h.handlePostRequest(w, r)
+		if err := h.handlePostRequest(w, r); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "%#v", err)
+		}
 	}
 }
 
 func (h *BaseHandler) handlePostRequest(rw http.ResponseWriter, req *http.Request) error {
 	payload, err := h.getPayload(req)
 	if err != nil {
-		return err
+		return xerrors.Errorf("getPayload(%#v): %#v", req, err)
 	}
 
 	// TODO:
@@ -49,30 +47,33 @@ func (h *BaseHandler) handlePostRequest(rw http.ResponseWriter, req *http.Reques
 
 	event, err := slackevents.ParseEvent(payload, slackevents.OptionNoVerifyToken())
 	if err != nil {
-		return err
+		return xerrors.Errorf("slackevents.ParseEvent(%#v): %#v", payload, err)
 	}
 
 	switch event.Type {
 	case slackevents.URLVerification:
-		return h.verifyURL(rw, event.Data.(slackevents.EventsAPIURLVerificationEvent))
+		if uve, ok := event.Data.(slackevents.EventsAPIURLVerificationEvent); ok {
+			return h.verifyURL(rw, uve)
+		}
+		return fmt.Errorf("event.Data is not EventsAPIURLVerificationEvent: %#v", event.Data)
 
 	case slackevents.CallbackEvent:
 		if err := h.handleCallback(req, &event); err != nil {
-			return err
+			return xerrors.Errorf("handleCallback: %#v", err)
 		}
 		return nil
 
 	case string(slack.InteractionTypeBlockActions):
 		intCb := slack.InteractionCallback{}
 		if err := json.Unmarshal(payload, &intCb); err != nil {
-			return err
+			return xerrors.Errorf("json.Unmarshal(%#v): %#v", payload, err)
 		}
 
 		h.handler.OnBlockActions(req, &intCb)
 		return nil
 
 	default:
-		return fmt.Errorf("unknown type: %v", event.Type)
+		return xerrors.Errorf("unknown type: %#v", event.Type)
 	}
 }
 
@@ -83,7 +84,7 @@ func (h *BaseHandler) handleCallback(req *http.Request, event *slackevents.Event
 		return nil
 
 	default:
-		return fmt.Errorf("unknown type: %v/%v", event.Type, event.InnerEvent.Type)
+		return xerrors.Errorf("unknown type: %#v/%#v", event.Type, event.InnerEvent.Type)
 	}
 }
 
@@ -97,7 +98,7 @@ func (h *BaseHandler) getPayload(req *http.Request) ([]byte, error) {
 	case "application/json":
 		return ioutil.ReadAll(req.Body)
 	default:
-		return nil, fmt.Errorf("unsupported content-type: %v", req.Header.Get("Content-Type"))
+		return nil, xerrors.Errorf("unsupported content-type: %#v", req.Header.Get("Content-Type"))
 	}
 }
 
