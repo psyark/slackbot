@@ -15,14 +15,19 @@ type Router struct {
 	AppHomeOpened func(req *http.Request, event *slackevents.AppHomeOpenedEvent)
 	Message       func(req *http.Request, event *slackevents.MessageEvent)
 	BlockActions  func(req *http.Request, cb *slack.InteractionCallback)
+	Error         func(w http.ResponseWriter, r *http.Request, err error)
 }
 
 func (h *Router) Route(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		if err := h.handlePostRequest(w, r); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "%#v", err)
+			if h.Error != nil {
+				h.Error(w, r, err)
+			} else {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintf(w, "%#v", err)
+			}
 		}
 	}
 }
