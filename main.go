@@ -11,20 +11,13 @@ import (
 	"golang.org/x/xerrors"
 )
 
-type Handler interface {
-	OnCallbackMessage(req *http.Request, event *slackevents.MessageEvent)
-	OnBlockActions(req *http.Request, cb *slack.InteractionCallback)
+type Router struct {
+	AppHomeOpened func(req *http.Request, event *slackevents.AppHomeOpenedEvent)
+	Message       func(req *http.Request, event *slackevents.MessageEvent)
+	BlockActions  func(req *http.Request, cb *slack.InteractionCallback)
 }
 
-type BaseHandler struct {
-	handler Handler
-}
-
-func New(handler Handler) *BaseHandler {
-	return &BaseHandler{handler: handler}
-}
-
-func (h *BaseHandler) Handler(w http.ResponseWriter, r *http.Request) {
+func (h *Router) Route(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		if err := h.handlePostRequest(w, r); err != nil {
@@ -34,7 +27,7 @@ func (h *BaseHandler) Handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *BaseHandler) handlePostRequest(rw http.ResponseWriter, req *http.Request) error {
+func (h *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) error {
 	payload, err := h.getPayload(req)
 	if err != nil {
 		return xerrors.Errorf("getPayload(%#v): %#v", req, err)
@@ -64,12 +57,13 @@ func (h *BaseHandler) handlePostRequest(rw http.ResponseWriter, req *http.Reques
 		return nil
 
 	case string(slack.InteractionTypeBlockActions):
-		intCb := slack.InteractionCallback{}
-		if err := json.Unmarshal(payload, &intCb); err != nil {
-			return xerrors.Errorf("json.Unmarshal(%#v): %#v", payload, err)
+		if h.BlockActions != nil {
+			intCb := slack.InteractionCallback{}
+			if err := json.Unmarshal(payload, &intCb); err != nil {
+				return xerrors.Errorf("json.Unmarshal(%#v): %#v", payload, err)
+			}
+			h.BlockActions(req, &intCb)
 		}
-
-		h.handler.OnBlockActions(req, &intCb)
 		return nil
 
 	default:
@@ -77,10 +71,17 @@ func (h *BaseHandler) handlePostRequest(rw http.ResponseWriter, req *http.Reques
 	}
 }
 
-func (h *BaseHandler) handleCallback(req *http.Request, event *slackevents.EventsAPIEvent) error {
+func (h *Router) handleCallback(req *http.Request, event *slackevents.EventsAPIEvent) error {
 	switch innerEvent := event.InnerEvent.Data.(type) {
+	case *slackevents.AppHomeOpenedEvent:
+		if h.AppHomeOpened != nil {
+			h.AppHomeOpened(req, innerEvent)
+		}
+		return nil
 	case *slackevents.MessageEvent:
-		h.handler.OnCallbackMessage(req, innerEvent)
+		if h.Message != nil {
+			h.Message(req, innerEvent)
+		}
 		return nil
 
 	default:
@@ -88,7 +89,7 @@ func (h *BaseHandler) handleCallback(req *http.Request, event *slackevents.Event
 	}
 }
 
-func (h *BaseHandler) getPayload(req *http.Request) ([]byte, error) {
+func (h *Router) getPayload(req *http.Request) ([]byte, error) {
 	switch req.Header.Get("Content-Type") {
 	case "application/x-www-form-urlencoded":
 		if err := req.ParseForm(); err != nil {
@@ -102,7 +103,7 @@ func (h *BaseHandler) getPayload(req *http.Request) ([]byte, error) {
 	}
 }
 
-func (h *BaseHandler) verifyURL(rw http.ResponseWriter, uvEvent *slackevents.EventsAPIURLVerificationEvent) error {
+func (h *Router) verifyURL(rw http.ResponseWriter, uvEvent *slackevents.EventsAPIURLVerificationEvent) error {
 	rw.Header().Set("Content-Type", "text/plain")
 	_, err := rw.Write([]byte(uvEvent.Challenge))
 	return err
