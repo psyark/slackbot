@@ -12,9 +12,9 @@ import (
 )
 
 type Router struct {
-	AppHomeOpened func(req *http.Request, event *slackevents.AppHomeOpenedEvent)
-	Message       func(req *http.Request, event *slackevents.MessageEvent)
-	BlockActions  func(req *http.Request, cb *slack.InteractionCallback)
+	AppHomeOpened func(req *http.Request, event *slackevents.AppHomeOpenedEvent) error
+	Message       func(req *http.Request, event *slackevents.MessageEvent) error
+	BlockActions  func(req *http.Request, cb *slack.InteractionCallback) error
 	Error         func(w http.ResponseWriter, r *http.Request, err error)
 }
 
@@ -67,7 +67,7 @@ func (h *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 			if err := json.Unmarshal(payload, &intCb); err != nil {
 				return xerrors.Errorf("json.Unmarshal(%#v): %#v", payload, err)
 			}
-			h.BlockActions(req, &intCb)
+			return h.BlockActions(req, &intCb)
 		}
 		return nil
 
@@ -80,12 +80,12 @@ func (h *Router) handleCallback(req *http.Request, event *slackevents.EventsAPIE
 	switch innerEvent := event.InnerEvent.Data.(type) {
 	case *slackevents.AppHomeOpenedEvent:
 		if h.AppHomeOpened != nil {
-			h.AppHomeOpened(req, innerEvent)
+			return h.AppHomeOpened(req, innerEvent)
 		}
 		return nil
 	case *slackevents.MessageEvent:
 		if h.Message != nil {
-			h.Message(req, innerEvent)
+			return h.Message(req, innerEvent)
 		}
 		return nil
 
