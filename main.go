@@ -12,10 +12,11 @@ import (
 )
 
 type Router struct {
-	AppHomeOpened func(req *http.Request, event *slackevents.AppHomeOpenedEvent) error
-	Message       func(req *http.Request, event *slackevents.MessageEvent) error
-	BlockActions  func(req *http.Request, cb *slack.InteractionCallback) error
-	Error         func(w http.ResponseWriter, r *http.Request, err error)
+	AppHomeOpened  func(req *http.Request, event *slackevents.AppHomeOpenedEvent) error
+	Message        func(req *http.Request, event *slackevents.MessageEvent) error
+	BlockActions   func(req *http.Request, cb *slack.InteractionCallback) error
+	ViewSubmission func(req *http.Request, cb *slack.ViewSubmissionCallback) error
+	Error          func(w http.ResponseWriter, r *http.Request, err error)
 }
 
 func (h *Router) Route(w http.ResponseWriter, r *http.Request) {
@@ -79,6 +80,16 @@ func (h *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 				return xerrors.Errorf("json.Unmarshal(%#v): %#v", payload, err)
 			}
 			return h.BlockActions(req, &intCb)
+		}
+		return nil
+
+	case string(slack.InteractionTypeViewSubmission):
+		if h.ViewSubmission != nil {
+			vsCb := slack.ViewSubmissionCallback{}
+			if err := json.Unmarshal(payload, &vsCb); err != nil {
+				return xerrors.Errorf("json.Unmarshal(%#v): %#v", payload, err)
+			}
+			return h.ViewSubmission(req, &vsCb)
 		}
 		return nil
 
