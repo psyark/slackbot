@@ -21,6 +21,17 @@ type Router struct {
 func (h *Router) Route(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
+		defer func() {
+			if err := recover(); err != nil {
+				if h.Error != nil {
+					h.Error(w, r, fmt.Errorf("panic: %#v", err))
+				} else {
+					w.WriteHeader(http.StatusInternalServerError)
+					fmt.Fprintf(w, "%#v", err)
+				}
+			}
+		}()
+
 		if err := h.handlePostRequest(w, r); err != nil {
 			if h.Error != nil {
 				h.Error(w, r, err)
