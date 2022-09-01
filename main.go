@@ -15,7 +15,7 @@ type Router struct {
 	AppHomeOpened  func(req *http.Request, event *slackevents.AppHomeOpenedEvent) error
 	Message        func(req *http.Request, event *slackevents.MessageEvent) error
 	BlockActions   func(req *http.Request, cb *slack.InteractionCallback) error
-	ViewSubmission func(req *http.Request, cb *slack.InteractionCallback) error
+	ViewSubmission func(req *http.Request, cb *slack.InteractionCallback) (*slack.ViewSubmissionResponse, error)
 	Error          func(w http.ResponseWriter, r *http.Request, err error)
 }
 
@@ -89,7 +89,20 @@ func (h *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 			if err := json.Unmarshal(payload, &intCb); err != nil {
 				return xerrors.Errorf("json.Unmarshal(%#v): %#v", payload, err)
 			}
-			return h.ViewSubmission(req, &intCb)
+			res, err := h.ViewSubmission(req, &intCb)
+			if err != nil {
+				return err
+			}
+			if res != nil {
+				data, err := json.Marshal(res)
+				if err != nil {
+					return err
+				}
+				_, err = rw.Write(data)
+				if err != nil {
+					return err
+				}
+			}
 		}
 		return nil
 
