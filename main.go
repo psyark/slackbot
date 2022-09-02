@@ -94,14 +94,9 @@ func (h *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 				return err
 			}
 			if res != nil {
-				data, err := json.Marshal(res)
-				if err != nil {
-					return err
-				}
-				_, err = rw.Write(data)
-				if err != nil {
-					return err
-				}
+				rw.Header().Add("Content-Type", "application/json")
+				rw.WriteHeader(http.StatusOK)
+				return json.NewEncoder(rw).Encode(res)
 			}
 		}
 		return nil
