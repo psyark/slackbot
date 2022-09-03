@@ -11,12 +11,37 @@ import (
 	"golang.org/x/xerrors"
 )
 
+type namespace string
+
+func (ns namespace) resolve(part string) string {
+	return string(ns) + "." + part
+}
+
+type BlockActionsHandler func(callback *slack.InteractionCallback, action *slack.BlockAction) error
+
 type Router struct {
-	AppHomeOpened  func(req *http.Request, event *slackevents.AppHomeOpenedEvent) error
-	Message        func(req *http.Request, event *slackevents.MessageEvent) error
-	BlockActions   func(req *http.Request, cb *slack.InteractionCallback) error
-	ViewSubmission func(req *http.Request, cb *slack.InteractionCallback) (*slack.ViewSubmissionResponse, error)
-	Error          func(w http.ResponseWriter, r *http.Request, err error)
+	AppHomeOpened         func(req *http.Request, event *slackevents.AppHomeOpenedEvent) error
+	Message               func(req *http.Request, event *slackevents.MessageEvent) error
+	ViewSubmission        func(req *http.Request, cb *slack.InteractionCallback) (*slack.ViewSubmissionResponse, error)
+	Error                 func(w http.ResponseWriter, r *http.Request, err error)
+	blockActionsNamespace namespace
+	blockActionsHandlers  map[string]BlockActionsHandler
+}
+
+func New() *Router {
+	return &Router{
+		blockActionsNamespace: namespace("ba"),
+		blockActionsHandlers:  map[string]BlockActionsHandler{},
+	}
+}
+
+func (r *Router) AddBlockActions(name string, handler BlockActionsHandler) string {
+	actionID := r.blockActionsNamespace.resolve(name)
+	if _, ok := r.blockActionsHandlers[actionID]; ok {
+		panic(actionID)
+	}
+	r.blockActionsHandlers[actionID] = handler
+	return actionID
 }
 
 func (h *Router) Route(w http.ResponseWriter, r *http.Request) {
@@ -74,12 +99,15 @@ func (h *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 		return nil
 
 	case string(slack.InteractionTypeBlockActions):
-		if h.BlockActions != nil {
-			intCb := slack.InteractionCallback{}
-			if err := json.Unmarshal(payload, &intCb); err != nil {
-				return xerrors.Errorf("json.Unmarshal(%#v): %#v", payload, err)
+		callback := slack.InteractionCallback{}
+		if err := json.Unmarshal(payload, &callback); err != nil {
+			return xerrors.Errorf("json.Unmarshal(%#v): %#v", payload, err)
+		}
+
+		for _, action := range callback.ActionCallback.BlockActions {
+			if err := h.blockActionsHandlers[action.ActionID](&callback, action); err != nil {
+				return xerrors.Errorf("blockActions: %#v", err)
 			}
-			return h.BlockActions(req, &intCb)
 		}
 		return nil
 
