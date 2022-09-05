@@ -12,7 +12,7 @@ import (
 
 func ExampleBot() {
 	router := New()
-	actionID := router.AddBlockActions("hoge", func(callback *slack.InteractionCallback, action *slack.BlockAction) error {
+	actionID := router.GetActionID("hoge", func(callback *slack.InteractionCallback, action *slack.BlockAction) error {
 		fmt.Println("OK!")
 		return nil
 	})

@@ -17,31 +17,44 @@ func (ns namespace) resolve(part string) string {
 	return string(ns) + "." + part
 }
 
-type BlockActionsHandler func(callback *slack.InteractionCallback, action *slack.BlockAction) error
+type BlockActionHandler func(callback *slack.InteractionCallback, action *slack.BlockAction) error
+type ViewSubmissionHandler func(callback *slack.InteractionCallback) (*slack.ViewSubmissionResponse, error)
 
 type Router struct {
-	AppHomeOpened         func(req *http.Request, event *slackevents.AppHomeOpenedEvent) error
-	Message               func(req *http.Request, event *slackevents.MessageEvent) error
-	ViewSubmission        func(req *http.Request, cb *slack.InteractionCallback) (*slack.ViewSubmissionResponse, error)
-	Error                 func(w http.ResponseWriter, r *http.Request, err error)
-	blockActionsNamespace namespace
-	blockActionsHandlers  map[string]BlockActionsHandler
+	AppHomeOpened           func(req *http.Request, event *slackevents.AppHomeOpenedEvent) error
+	Message                 func(req *http.Request, event *slackevents.MessageEvent) error
+	Error                   func(w http.ResponseWriter, r *http.Request, err error)
+	blockActionNamespace    namespace
+	blockActionHandlers     map[string]BlockActionHandler
+	viewSubmissionNamespace namespace
+	viewSubmissionHandlers  map[string]ViewSubmissionHandler
 }
 
 func New() *Router {
 	return &Router{
-		blockActionsNamespace: namespace("ba"),
-		blockActionsHandlers:  map[string]BlockActionsHandler{},
+		blockActionNamespace:    namespace("ba"),
+		blockActionHandlers:     map[string]BlockActionHandler{},
+		viewSubmissionNamespace: namespace("vs"),
+		viewSubmissionHandlers:  map[string]ViewSubmissionHandler{},
 	}
 }
 
-func (r *Router) AddBlockActions(name string, handler BlockActionsHandler) string {
-	actionID := r.blockActionsNamespace.resolve(name)
-	if _, ok := r.blockActionsHandlers[actionID]; ok {
+func (r *Router) GetActionID(name string, handler BlockActionHandler) string {
+	actionID := r.blockActionNamespace.resolve(name)
+	if _, ok := r.blockActionHandlers[actionID]; ok {
 		panic(actionID)
 	}
-	r.blockActionsHandlers[actionID] = handler
+	r.blockActionHandlers[actionID] = handler
 	return actionID
+}
+
+func (r *Router) GetCallbackID(name string, handler ViewSubmissionHandler) string {
+	callbackID := r.viewSubmissionNamespace.resolve(name)
+	if _, ok := r.viewSubmissionHandlers[callbackID]; ok {
+		panic(callbackID)
+	}
+	r.viewSubmissionHandlers[callbackID] = handler
+	return callbackID
 }
 
 func (h *Router) Route(w http.ResponseWriter, r *http.Request) {
@@ -105,7 +118,7 @@ func (h *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 		}
 
 		for _, action := range callback.ActionCallback.BlockActions {
-			if handler, ok := h.blockActionsHandlers[action.ActionID]; ok {
+			if handler, ok := h.blockActionHandlers[action.ActionID]; ok {
 				if err := handler(&callback, action); err != nil {
 					return xerrors.Errorf("blockActions: %#v", err)
 				}
@@ -116,12 +129,12 @@ func (h *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 		return nil
 
 	case string(slack.InteractionTypeViewSubmission):
-		if h.ViewSubmission != nil {
-			intCb := slack.InteractionCallback{}
-			if err := json.Unmarshal(payload, &intCb); err != nil {
-				return xerrors.Errorf("json.Unmarshal(%#v): %#v", payload, err)
-			}
-			res, err := h.ViewSubmission(req, &intCb)
+		callback := slack.InteractionCallback{}
+		if err := json.Unmarshal(payload, &callback); err != nil {
+			return xerrors.Errorf("json.Unmarshal(%#v): %#v", payload, err)
+		}
+		if handler, ok := h.viewSubmissionHandlers[callback.View.CallbackID]; ok {
+			res, err := handler(&callback)
 			if err != nil {
 				return err
 			}
@@ -130,8 +143,10 @@ func (h *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 				rw.WriteHeader(http.StatusOK)
 				return json.NewEncoder(rw).Encode(res)
 			}
+			return nil
+		} else {
+			return fmt.Errorf("unknown callbackID: %v", callback.View.CallbackID)
 		}
-		return nil
 
 	default:
 		return xerrors.Errorf("unknown type: %#v", event.Type)
