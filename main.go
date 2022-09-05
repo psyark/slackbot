@@ -105,8 +105,12 @@ func (h *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 		}
 
 		for _, action := range callback.ActionCallback.BlockActions {
-			if err := h.blockActionsHandlers[action.ActionID](&callback, action); err != nil {
-				return xerrors.Errorf("blockActions: %#v", err)
+			if handler, ok := h.blockActionsHandlers[action.ActionID]; ok {
+				if err := handler(&callback, action); err != nil {
+					return xerrors.Errorf("blockActions: %#v", err)
+				}
+			} else {
+				return fmt.Errorf("unknown actionID: %v", action.ActionID)
 			}
 		}
 		return nil
