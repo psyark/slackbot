@@ -11,50 +11,17 @@ import (
 	"golang.org/x/xerrors"
 )
 
-type namespace string
-
-func (ns namespace) resolve(part string) string {
-	return string(ns) + "." + part
-}
-
-type BlockActionHandler func(callback *slack.InteractionCallback, action *slack.BlockAction) error
-type ViewSubmissionHandler func(callback *slack.InteractionCallback) (*slack.ViewSubmissionResponse, error)
+var _ HandlerRegistory = &Router{}
 
 type Router struct {
-	AppHomeOpened           func(req *http.Request, event *slackevents.AppHomeOpenedEvent) error
-	Message                 func(req *http.Request, event *slackevents.MessageEvent) error
-	Error                   func(w http.ResponseWriter, r *http.Request, err error)
-	blockActionNamespace    namespace
-	blockActionHandlers     map[string]BlockActionHandler
-	viewSubmissionNamespace namespace
-	viewSubmissionHandlers  map[string]ViewSubmissionHandler
+	*handlerRegistory
+	AppHomeOpened func(req *http.Request, event *slackevents.AppHomeOpenedEvent) error
+	Message       func(req *http.Request, event *slackevents.MessageEvent) error
+	Error         func(w http.ResponseWriter, r *http.Request, err error)
 }
 
 func New() *Router {
-	return &Router{
-		blockActionNamespace:    namespace("ba"),
-		blockActionHandlers:     map[string]BlockActionHandler{},
-		viewSubmissionNamespace: namespace("vs"),
-		viewSubmissionHandlers:  map[string]ViewSubmissionHandler{},
-	}
-}
-
-func (r *Router) GetActionID(name string, handler BlockActionHandler) string {
-	actionID := r.blockActionNamespace.resolve(name)
-	if _, ok := r.blockActionHandlers[actionID]; ok {
-		panic(actionID)
-	}
-	r.blockActionHandlers[actionID] = handler
-	return actionID
-}
-
-func (r *Router) GetCallbackID(name string, handler ViewSubmissionHandler) string {
-	callbackID := r.viewSubmissionNamespace.resolve(name)
-	if _, ok := r.viewSubmissionHandlers[callbackID]; ok {
-		panic(callbackID)
-	}
-	r.viewSubmissionHandlers[callbackID] = handler
-	return callbackID
+	return &Router{handlerRegistory: newHandlerRegistory()}
 }
 
 func (h *Router) Route(w http.ResponseWriter, r *http.Request) {
@@ -82,8 +49,8 @@ func (h *Router) Route(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) error {
-	payload, err := h.getPayload(req)
+func (r *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) error {
+	payload, err := r.getPayload(req)
 	if err != nil {
 		return xerrors.Errorf("getPayload(%#v): %#v", req, err)
 	}
@@ -101,12 +68,12 @@ func (h *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 	switch event.Type {
 	case slackevents.URLVerification:
 		if uve, ok := event.Data.(*slackevents.EventsAPIURLVerificationEvent); ok {
-			return h.verifyURL(rw, uve)
+			return r.verifyURL(rw, uve)
 		}
 		return fmt.Errorf("event.Data is not *EventsAPIURLVerificationEvent: %#v", event.Data)
 
 	case slackevents.CallbackEvent:
-		if err := h.handleCallback(req, &event); err != nil {
+		if err := r.handleCallback(req, &event); err != nil {
 			return xerrors.Errorf("handleCallback: %#v", err)
 		}
 		return nil
@@ -118,7 +85,7 @@ func (h *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 		}
 
 		for _, action := range callback.ActionCallback.BlockActions {
-			if handler, ok := h.blockActionHandlers[action.ActionID]; ok {
+			if handler, ok := r.handlerRegistory.blockAction[action.ActionID]; ok {
 				if err := handler(&callback, action); err != nil {
 					return xerrors.Errorf("blockActions: %#v", err)
 				}
@@ -133,7 +100,7 @@ func (h *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 		if err := json.Unmarshal(payload, &callback); err != nil {
 			return xerrors.Errorf("json.Unmarshal(%#v): %#v", payload, err)
 		}
-		if handler, ok := h.viewSubmissionHandlers[callback.View.CallbackID]; ok {
+		if handler, ok := r.handlerRegistory.viewSubmission[callback.View.CallbackID]; ok {
 			res, err := handler(&callback)
 			if err != nil {
 				return err

@@ -13,11 +13,18 @@ import (
 func ExampleBot() {
 	router := New()
 	actionID := router.GetActionID("hoge", func(callback *slack.InteractionCallback, action *slack.BlockAction) error {
-		fmt.Println("OK!")
+		fmt.Println("HOGE")
 		return nil
 	})
 
 	fmt.Println(actionID)
+
+	actionID2 := router.Child("fuga").GetActionID("piyo", func(callback *slack.InteractionCallback, action *slack.BlockAction) error {
+		fmt.Println("FUGA.PIYO")
+		return nil
+	})
+
+	fmt.Println(actionID2)
 
 	router.Error = func(w http.ResponseWriter, r *http.Request, err error) {
 		panic(err)
@@ -25,10 +32,13 @@ func ExampleBot() {
 
 	w := &responseWriter{}
 	router.Route(w, createDummyRequest(actionID))
+	router.Route(w, createDummyRequest(actionID2))
 
 	// Output:
-	// ba.hoge
-	// OK!
+	// hoge
+	// fuga.piyo
+	// HOGE
+	// FUGA.PIYO
 }
 
 func createDummyRequest(actionID string) *http.Request {
