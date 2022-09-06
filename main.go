@@ -11,17 +11,17 @@ import (
 	"golang.org/x/xerrors"
 )
 
-var _ HandlerRegistory = &Router{}
+var _ HandlerRegistry = &Router{}
 
 type Router struct {
-	*handlerRegistory
+	*handlerRegistry
 	AppHomeOpened func(req *http.Request, event *slackevents.AppHomeOpenedEvent) error
 	Message       func(req *http.Request, event *slackevents.MessageEvent) error
 	Error         func(w http.ResponseWriter, r *http.Request, err error)
 }
 
 func New() *Router {
-	return &Router{handlerRegistory: newHandlerRegistory()}
+	return &Router{handlerRegistry: newHandlerRegistry()}
 }
 
 func (h *Router) Route(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +85,7 @@ func (r *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 		}
 
 		for _, action := range callback.ActionCallback.BlockActions {
-			if handler, ok := r.handlerRegistory.blockAction[action.ActionID]; ok {
+			if handler, ok := r.handlerRegistry.blockAction[action.ActionID]; ok {
 				if err := handler(&callback, action); err != nil {
 					return xerrors.Errorf("blockActions: %#v", err)
 				}
@@ -100,7 +100,7 @@ func (r *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 		if err := json.Unmarshal(payload, &callback); err != nil {
 			return xerrors.Errorf("json.Unmarshal(%#v): %#v", payload, err)
 		}
-		if handler, ok := r.handlerRegistory.viewSubmission[callback.View.CallbackID]; ok {
+		if handler, ok := r.handlerRegistry.viewSubmission[callback.View.CallbackID]; ok {
 			res, err := handler(&callback)
 			if err != nil {
 				return err

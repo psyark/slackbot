@@ -1,27 +1,27 @@
 package slackbot
 
-type HandlerRegistory interface {
-	Child(name string) HandlerRegistory
+type HandlerRegistry interface {
+	Child(name string) HandlerRegistry
 	GetActionID(name string, handler BlockActionHandler) string
 	GetCallbackID(name string, handler ViewSubmissionHandler) string
 }
 
-var _ HandlerRegistory = &handlerRegistory{}
+var _ HandlerRegistry = &handlerRegistry{}
 
-type handlerRegistory struct {
+type handlerRegistry struct {
 	namespace      string
 	blockAction    map[string]BlockActionHandler
 	viewSubmission map[string]ViewSubmissionHandler
 }
 
-func newHandlerRegistory() *handlerRegistory {
-	return &handlerRegistory{
+func newHandlerRegistry() *handlerRegistry {
+	return &handlerRegistry{
 		blockAction:    map[string]BlockActionHandler{},
 		viewSubmission: map[string]ViewSubmissionHandler{},
 	}
 }
 
-func (r *handlerRegistory) resolve(name string) string {
+func (r *handlerRegistry) resolve(name string) string {
 	if r.namespace == "" {
 		return name
 	} else {
@@ -29,15 +29,15 @@ func (r *handlerRegistory) resolve(name string) string {
 	}
 }
 
-func (r *handlerRegistory) Child(name string) HandlerRegistory {
-	return &handlerRegistory{
+func (r *handlerRegistry) Child(name string) HandlerRegistry {
+	return &handlerRegistry{
 		namespace:      r.resolve(name),
 		blockAction:    r.blockAction,
 		viewSubmission: r.viewSubmission,
 	}
 }
 
-func (r *handlerRegistory) GetActionID(name string, handler BlockActionHandler) string {
+func (r *handlerRegistry) GetActionID(name string, handler BlockActionHandler) string {
 	id := r.resolve(name)
 	if _, ok := r.blockAction[id]; ok {
 		panic(id)
@@ -46,7 +46,7 @@ func (r *handlerRegistory) GetActionID(name string, handler BlockActionHandler) 
 	return id
 }
 
-func (r *handlerRegistory) GetCallbackID(name string, handler ViewSubmissionHandler) string {
+func (r *handlerRegistry) GetCallbackID(name string, handler ViewSubmissionHandler) string {
 	id := r.resolve(name)
 	if _, ok := r.viewSubmission[id]; ok {
 		panic(id)
