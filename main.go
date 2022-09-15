@@ -8,7 +8,6 @@ import (
 
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
-	"golang.org/x/xerrors"
 )
 
 var _ HandlerRegistry = &Router{}
@@ -52,7 +51,7 @@ func (h *Router) Route(w http.ResponseWriter, r *http.Request) {
 func (r *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) error {
 	payload, err := r.getPayload(req)
 	if err != nil {
-		return xerrors.Errorf("getPayload(%#v): %#v", req, err)
+		return fmt.Errorf("getPayload(%#v): %#v", req, err)
 	}
 
 	// TODO:
@@ -62,7 +61,7 @@ func (r *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 
 	event, err := slackevents.ParseEvent(payload, slackevents.OptionNoVerifyToken())
 	if err != nil {
-		return xerrors.Errorf("slackevents.ParseEvent(%#v): %#v", payload, err)
+		return fmt.Errorf("slackevents.ParseEvent(%#v): %#v", payload, err)
 	}
 
 	switch event.Type {
@@ -74,20 +73,20 @@ func (r *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 
 	case slackevents.CallbackEvent:
 		if err := r.handleCallback(req, &event); err != nil {
-			return xerrors.Errorf("handleCallback: %#v", err)
+			return fmt.Errorf("handleCallback: %#v", err)
 		}
 		return nil
 
 	case string(slack.InteractionTypeBlockActions):
 		callback := slack.InteractionCallback{}
 		if err := json.Unmarshal(payload, &callback); err != nil {
-			return xerrors.Errorf("json.Unmarshal(%#v): %#v", payload, err)
+			return fmt.Errorf("json.Unmarshal(%#v): %#v", payload, err)
 		}
 
 		for _, action := range callback.ActionCallback.BlockActions {
 			if handler, ok := r.handlerRegistry.blockAction[action.ActionID]; ok {
 				if err := handler(&callback, action); err != nil {
-					return xerrors.Errorf("blockActions: %#v", err)
+					return fmt.Errorf("blockActions: %#v", err)
 				}
 			} else {
 				return fmt.Errorf("unknown actionID: %v", action.ActionID)
@@ -98,7 +97,7 @@ func (r *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 	case string(slack.InteractionTypeViewSubmission):
 		callback := slack.InteractionCallback{}
 		if err := json.Unmarshal(payload, &callback); err != nil {
-			return xerrors.Errorf("json.Unmarshal(%#v): %#v", payload, err)
+			return fmt.Errorf("json.Unmarshal(%#v): %#v", payload, err)
 		}
 		if handler, ok := r.handlerRegistry.viewSubmission[callback.View.CallbackID]; ok {
 			res, err := handler(&callback)
@@ -116,7 +115,7 @@ func (r *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 		}
 
 	default:
-		return xerrors.Errorf("unknown type: %#v", event.Type)
+		return fmt.Errorf("unknown type: %#v", event.Type)
 	}
 }
 
@@ -134,7 +133,7 @@ func (h *Router) handleCallback(req *http.Request, event *slackevents.EventsAPIE
 		return nil
 
 	default:
-		return xerrors.Errorf("unknown type: %#v/%#v", event.Type, event.InnerEvent.Type)
+		return fmt.Errorf("unknown type: %#v/%#v", event.Type, event.InnerEvent.Type)
 	}
 }
 
@@ -148,7 +147,7 @@ func (h *Router) getPayload(req *http.Request) ([]byte, error) {
 	case "application/json":
 		return ioutil.ReadAll(req.Body)
 	default:
-		return nil, xerrors.Errorf("unsupported content-type: %#v", req.Header.Get("Content-Type"))
+		return nil, fmt.Errorf("unsupported content-type: %#v", req.Header.Get("Content-Type"))
 	}
 }
 

@@ -7,5 +7,4 @@ replace github.com/psyark/slackbot => ./
 require (
 	github.com/slack-go/slack v0.11.2
 	github.com/stretchr/testify v1.6.1 // indirect
-	golang.org/x/xerrors v0.0.0-20220609144429-65e65417b02f
 )
