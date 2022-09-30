@@ -59,7 +59,7 @@ func (r *GetHandlerOption) handlePostRequest(rw http.ResponseWriter, req *http.R
 
 	event, err := slackevents.ParseEvent(payload, slackevents.OptionNoVerifyToken())
 	if err != nil {
-		return fmt.Errorf("slackevents.ParseEvent(%#v): %#v", payload, err)
+		return fmt.Errorf("slackevents.ParseEvent(%#v): %w", payload, err)
 	}
 
 	switch event.Type {
@@ -71,20 +71,20 @@ func (r *GetHandlerOption) handlePostRequest(rw http.ResponseWriter, req *http.R
 
 	case slackevents.CallbackEvent:
 		if err := r.handleCallback(req, &event); err != nil {
-			return fmt.Errorf("handleCallback: %#v", err)
+			return err
 		}
 		return nil
 
 	case string(slack.InteractionTypeBlockActions):
 		callback := slack.InteractionCallback{}
 		if err := json.Unmarshal(payload, &callback); err != nil {
-			return fmt.Errorf("json.Unmarshal(%#v): %#v", payload, err)
+			return fmt.Errorf("json.Unmarshal(%#v): %w", payload, err)
 		}
 
 		for _, action := range callback.ActionCallback.BlockActions {
 			if handler, ok := r.Registry.blockAction[action.ActionID]; ok {
 				if err := handler(&callback, action); err != nil {
-					return fmt.Errorf("blockActions: %#v", err)
+					return fmt.Errorf("blockActions: %w", err)
 				}
 			} else {
 				return fmt.Errorf("unknown actionID: %v", action.ActionID)
@@ -95,7 +95,7 @@ func (r *GetHandlerOption) handlePostRequest(rw http.ResponseWriter, req *http.R
 	case string(slack.InteractionTypeViewSubmission):
 		callback := slack.InteractionCallback{}
 		if err := json.Unmarshal(payload, &callback); err != nil {
-			return fmt.Errorf("json.Unmarshal(%#v): %#v", payload, err)
+			return fmt.Errorf("json.Unmarshal(%#v): %w", payload, err)
 		}
 		if handler, ok := r.Registry.viewSubmission[callback.View.CallbackID]; ok {
 			res, err := handler(&callback)
@@ -145,7 +145,7 @@ func (h *GetHandlerOption) getPayload(req *http.Request) ([]byte, error) {
 	case "application/json":
 		return io.ReadAll(req.Body)
 	default:
-		return nil, fmt.Errorf("unsupported content-type: %#v", req.Header.Get("Content-Type"))
+		return nil, fmt.Errorf("unsupported content-type: %v", req.Header.Get("Content-Type"))
 	}
 }
 
