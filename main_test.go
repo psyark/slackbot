@@ -11,28 +11,30 @@ import (
 )
 
 func ExampleBot() {
-	router := New()
-	actionID := router.GetActionID("hoge", func(callback *slack.InteractionCallback, action *slack.BlockAction) error {
+	registry := NewRegistry()
+	actionID := registry.GetActionID("hoge", func(callback *slack.InteractionCallback, action *slack.BlockAction) error {
 		fmt.Println("HOGE")
 		return nil
 	})
 
 	fmt.Println(actionID)
 
-	actionID2 := router.Child("fuga").GetActionID("piyo", func(callback *slack.InteractionCallback, action *slack.BlockAction) error {
+	actionID2 := registry.Child("fuga").GetActionID("piyo", func(callback *slack.InteractionCallback, action *slack.BlockAction) error {
 		fmt.Println("FUGA.PIYO")
 		return nil
 	})
 
 	fmt.Println(actionID2)
 
-	router.Error = func(w http.ResponseWriter, r *http.Request, err error) {
-		panic(err)
+	opt := &GetHandlerOption{
+		Registry: registry,
+		Error:    func(w http.ResponseWriter, r *http.Request, err error) { panic(err) },
 	}
 
 	w := &responseWriter{}
-	router.Route(w, createDummyRequest(actionID))
-	router.Route(w, createDummyRequest(actionID2))
+	handler := GetHandler(opt)
+	handler(w, createDummyRequest(actionID))
+	handler(w, createDummyRequest(actionID2))
 
 	// Output:
 	// hoge

@@ -3,27 +3,25 @@ package slackbot
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 )
 
-var _ HandlerRegistry = &Router{}
+func GetHandler(opt *GetHandlerOption) func(http.ResponseWriter, *http.Request) {
+	return opt.handleRequest
+}
 
-type Router struct {
-	*handlerRegistry
+type GetHandlerOption struct {
+	Registry      *HandlerRegistry
 	AppHomeOpened func(req *http.Request, event *slackevents.AppHomeOpenedEvent) error
 	Message       func(req *http.Request, event *slackevents.MessageEvent) error
 	Error         func(w http.ResponseWriter, r *http.Request, err error)
 }
 
-func New() *Router {
-	return &Router{handlerRegistry: newHandlerRegistry()}
-}
-
-func (h *Router) Route(w http.ResponseWriter, r *http.Request) {
+func (h *GetHandlerOption) handleRequest(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		defer func() {
@@ -48,7 +46,7 @@ func (h *Router) Route(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (r *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) error {
+func (r *GetHandlerOption) handlePostRequest(rw http.ResponseWriter, req *http.Request) error {
 	payload, err := r.getPayload(req)
 	if err != nil {
 		return fmt.Errorf("getPayload(%#v): %#v", req, err)
@@ -84,7 +82,7 @@ func (r *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 		}
 
 		for _, action := range callback.ActionCallback.BlockActions {
-			if handler, ok := r.handlerRegistry.blockAction[action.ActionID]; ok {
+			if handler, ok := r.Registry.blockAction[action.ActionID]; ok {
 				if err := handler(&callback, action); err != nil {
 					return fmt.Errorf("blockActions: %#v", err)
 				}
@@ -99,7 +97,7 @@ func (r *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 		if err := json.Unmarshal(payload, &callback); err != nil {
 			return fmt.Errorf("json.Unmarshal(%#v): %#v", payload, err)
 		}
-		if handler, ok := r.handlerRegistry.viewSubmission[callback.View.CallbackID]; ok {
+		if handler, ok := r.Registry.viewSubmission[callback.View.CallbackID]; ok {
 			res, err := handler(&callback)
 			if err != nil {
 				return err
@@ -119,7 +117,7 @@ func (r *Router) handlePostRequest(rw http.ResponseWriter, req *http.Request) er
 	}
 }
 
-func (h *Router) handleCallback(req *http.Request, event *slackevents.EventsAPIEvent) error {
+func (h *GetHandlerOption) handleCallback(req *http.Request, event *slackevents.EventsAPIEvent) error {
 	switch innerEvent := event.InnerEvent.Data.(type) {
 	case *slackevents.AppHomeOpenedEvent:
 		if h.AppHomeOpened != nil {
@@ -137,7 +135,7 @@ func (h *Router) handleCallback(req *http.Request, event *slackevents.EventsAPIE
 	}
 }
 
-func (h *Router) getPayload(req *http.Request) ([]byte, error) {
+func (h *GetHandlerOption) getPayload(req *http.Request) ([]byte, error) {
 	switch req.Header.Get("Content-Type") {
 	case "application/x-www-form-urlencoded":
 		if err := req.ParseForm(); err != nil {
@@ -145,13 +143,13 @@ func (h *Router) getPayload(req *http.Request) ([]byte, error) {
 		}
 		return []byte(req.Form.Get("payload")), nil
 	case "application/json":
-		return ioutil.ReadAll(req.Body)
+		return io.ReadAll(req.Body)
 	default:
 		return nil, fmt.Errorf("unsupported content-type: %#v", req.Header.Get("Content-Type"))
 	}
 }
 
-func (h *Router) verifyURL(rw http.ResponseWriter, uvEvent *slackevents.EventsAPIURLVerificationEvent) error {
+func (h *GetHandlerOption) verifyURL(rw http.ResponseWriter, uvEvent *slackevents.EventsAPIURLVerificationEvent) error {
 	rw.Header().Set("Content-Type", "text/plain")
 	_, err := rw.Write([]byte(uvEvent.Challenge))
 	return err
