@@ -6,14 +6,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/GoogleCloudPlatform/functions-framework-go/functions"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 )
-
-func RegisterHandler_WillNotWork(name string, opt *GetHandlerOption) {
-	functions.HTTP(name, GetHandler(opt))
-}
 
 func GetHandler(opt *GetHandlerOption) func(http.ResponseWriter, *http.Request) {
 	return opt.handleRequest
