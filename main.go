@@ -6,9 +6,16 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/GoogleCloudPlatform/functions-framework-go/functions"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 )
+
+// RegisterHandler はGoogle Cloud Functionsへの登録を行います
+// 呼び出し元も functions モジュールをインポートする必要があることに注意してください
+func RegisterHandler(name string, opt *GetHandlerOption) {
+	functions.HTTP(name, GetHandler(opt))
+}
 
 func GetHandler(opt *GetHandlerOption) func(http.ResponseWriter, *http.Request) {
 	return opt.handleRequest
