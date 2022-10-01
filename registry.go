@@ -1,19 +1,19 @@
 package slackbot
 
-type HandlerRegistry struct {
+type Registry struct {
 	namespace      string
 	blockAction    map[string]BlockActionHandler
 	viewSubmission map[string]ViewSubmissionHandler
 }
 
-func NewRegistry() *HandlerRegistry {
-	return &HandlerRegistry{
+func NewRegistry() *Registry {
+	return &Registry{
 		blockAction:    map[string]BlockActionHandler{},
 		viewSubmission: map[string]ViewSubmissionHandler{},
 	}
 }
 
-func (r *HandlerRegistry) resolve(name string) string {
+func (r *Registry) resolve(name string) string {
 	if r.namespace == "" {
 		return name
 	} else {
@@ -21,15 +21,15 @@ func (r *HandlerRegistry) resolve(name string) string {
 	}
 }
 
-func (r *HandlerRegistry) Child(name string) *HandlerRegistry {
-	return &HandlerRegistry{
+func (r *Registry) Child(name string) *Registry {
+	return &Registry{
 		namespace:      r.resolve(name),
 		blockAction:    r.blockAction,
 		viewSubmission: r.viewSubmission,
 	}
 }
 
-func (r *HandlerRegistry) GetActionID(name string, handler BlockActionHandler) string {
+func (r *Registry) GetActionID(name string, handler BlockActionHandler) string {
 	id := r.resolve(name)
 	if _, ok := r.blockAction[id]; ok {
 		panic(id)
@@ -38,7 +38,7 @@ func (r *HandlerRegistry) GetActionID(name string, handler BlockActionHandler) s
 	return id
 }
 
-func (r *HandlerRegistry) GetCallbackID(name string, handler ViewSubmissionHandler) string {
+func (r *Registry) GetCallbackID(name string, handler ViewSubmissionHandler) string {
 	id := r.resolve(name)
 	if _, ok := r.viewSubmission[id]; ok {
 		panic(id)

@@ -12,14 +12,14 @@ import (
 
 func ExampleBot() {
 	registry := NewRegistry()
-	actionID := registry.GetActionID("hoge", func(callback *slack.InteractionCallback, action *slack.BlockAction) error {
+	actionID := registry.GetActionID("hoge", func(_ *BlockActionHandlerArgs) error {
 		fmt.Println("HOGE")
 		return nil
 	})
 
 	fmt.Println(actionID)
 
-	actionID2 := registry.Child("fuga").GetActionID("piyo", func(callback *slack.InteractionCallback, action *slack.BlockAction) error {
+	actionID2 := registry.Child("fuga").GetActionID("piyo", func(_ *BlockActionHandlerArgs) error {
 		fmt.Println("FUGA.PIYO")
 		return nil
 	})
@@ -28,7 +28,7 @@ func ExampleBot() {
 
 	opt := &GetHandlerOption{
 		Registry: registry,
-		Error:    func(w http.ResponseWriter, r *http.Request, err error) { panic(err) },
+		Error:    func(args *ErrorHandlerArgs) { panic(args.Err) },
 	}
 
 	w := &responseWriter{}

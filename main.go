@@ -15,10 +15,10 @@ func GetHandler(opt *GetHandlerOption) func(http.ResponseWriter, *http.Request) 
 }
 
 type GetHandlerOption struct {
-	Registry      *HandlerRegistry
-	AppHomeOpened func(req *http.Request, event *slackevents.AppHomeOpenedEvent) error
-	Message       func(req *http.Request, event *slackevents.MessageEvent) error
-	Error         func(w http.ResponseWriter, r *http.Request, err error)
+	Registry      *Registry
+	AppHomeOpened AppHomeOpenedHandler
+	Message       MessageHandler
+	Error         ErrorHandler
 }
 
 func (h *GetHandlerOption) handleRequest(w http.ResponseWriter, r *http.Request) {
@@ -27,7 +27,11 @@ func (h *GetHandlerOption) handleRequest(w http.ResponseWriter, r *http.Request)
 		defer func() {
 			if err := recover(); err != nil {
 				if h.Error != nil {
-					h.Error(w, r, fmt.Errorf("panic: %#v", err))
+					h.Error(&ErrorHandlerArgs{
+						ResponseWriter: w,
+						Request:        r,
+						Err:            fmt.Errorf("panic: %#v", err),
+					})
 				} else {
 					w.WriteHeader(http.StatusInternalServerError)
 					fmt.Fprintf(w, "%#v", err)
@@ -37,7 +41,11 @@ func (h *GetHandlerOption) handleRequest(w http.ResponseWriter, r *http.Request)
 
 		if err := h.handlePostRequest(w, r); err != nil {
 			if h.Error != nil {
-				h.Error(w, r, err)
+				h.Error(&ErrorHandlerArgs{
+					ResponseWriter: w,
+					Request:        r,
+					Err:            err,
+				})
 			} else {
 				w.WriteHeader(http.StatusInternalServerError)
 				fmt.Fprintf(w, "%#v", err)
@@ -83,7 +91,12 @@ func (r *GetHandlerOption) handlePostRequest(rw http.ResponseWriter, req *http.R
 
 		for _, action := range callback.ActionCallback.BlockActions {
 			if handler, ok := r.Registry.blockAction[action.ActionID]; ok {
-				if err := handler(&callback, action); err != nil {
+				args := &BlockActionHandlerArgs{
+					Request:             req,
+					InteractionCallback: &callback,
+					BlockAction:         action,
+				}
+				if err := handler(args); err != nil {
 					return fmt.Errorf("blockActions: %w", err)
 				}
 			} else {
@@ -98,7 +111,11 @@ func (r *GetHandlerOption) handlePostRequest(rw http.ResponseWriter, req *http.R
 			return fmt.Errorf("json.Unmarshal(%#v): %w", payload, err)
 		}
 		if handler, ok := r.Registry.viewSubmission[callback.View.CallbackID]; ok {
-			res, err := handler(&callback)
+			args := &ViewSubmissionHandlerArgs{
+				Request:             req,
+				InteractionCallback: &callback,
+			}
+			res, err := handler(args)
 			if err != nil {
 				return err
 			}
@@ -121,12 +138,12 @@ func (h *GetHandlerOption) handleCallback(req *http.Request, event *slackevents.
 	switch innerEvent := event.InnerEvent.Data.(type) {
 	case *slackevents.AppHomeOpenedEvent:
 		if h.AppHomeOpened != nil {
-			return h.AppHomeOpened(req, innerEvent)
+			return h.AppHomeOpened(&AppHomeOpenedHandlerArgs{Request: req, AppHomeOpenedEvent: innerEvent})
 		}
 		return nil
 	case *slackevents.MessageEvent:
 		if h.Message != nil {
-			return h.Message(req, innerEvent)
+			return h.Message(&MessageHandlerArgs{Request: req, MessageEvent: innerEvent})
 		}
 		return nil
 
